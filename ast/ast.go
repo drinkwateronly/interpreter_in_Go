@@ -1,10 +1,14 @@
 package ast
 
-import "Monkey_1/token"
+import (
+	"Monkey_1/token"
+	"bytes"
+)
 
-// Node 结点接口
+// Node 结点接口, 都需要实现 TokenLiteral() 方法，返回其关联的词法单元token的字面量literal
 type Node interface {
-	TokenLiteral() string
+	TokenLiteral() string // 仅用于测试
+	String() string
 }
 
 type Statement interface {
@@ -17,7 +21,8 @@ type Expression interface {
 	expressionNode()
 }
 
-type Program struct { // 语法分析器⽣成的每个AST的根节点
+// 存放语法分析器⽣成的每个AST的根节点，每个程序有多个AST
+type Program struct {
 	Statements []Statement
 }
 
@@ -29,29 +34,81 @@ func (p *Program) TokenLiteral() string {
 	}
 }
 
-// LetStatement 是 Statement 接口的实现
+func (p *Program) String() string {
+	var out bytes.Buffer
+	for _, s := range p.Statements {
+		out.WriteString(s.String())
+	}
+	return out.String()
+}
+
+// LetStatement 是 Statement 接口的实现，是AST中的一个节点
 type LetStatement struct {
-	Token token.Token
-	Name  *Identifier
-	Value Expression
+	Token token.Token // 标识符的token类型
+	Name  *Identifier // 保存绑定的标识符，但其内部也有token类型？
+	Value Expression  // 保存产生值的表达式/或者值本身，为了保持简单，所以没有将两者区分开
 }
 
-func (ls *LetStatement) statementNode() {
-
-}
+func (ls *LetStatement) statementNode() {}
 
 func (ls *LetStatement) TokenLiteral() string {
 	return ls.Token.Literal
 }
 
+func (ls *LetStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString(ls.TokenLiteral() + " ")
+	out.WriteString(ls.Name.Value) // ?ls.Name.string()?------------------------------------------
+	out.WriteString("=")
+	if ls.Value != nil {
+		out.WriteString(ls.Value.String())
+	}
+	out.WriteString(";")
+	return out.String()
+}
+
+// Identifier --------------------------------------
 // Identifier 是 Expression 接口的实现
 type Identifier struct {
 	Token token.Token
 	Value string
 }
 
-func (i *Identifier) expressionNode() {
-
-}
+func (i *Identifier) expressionNode() {}
 
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
+
+func (i *Identifier) String() string { return i.Value }
+
+// ReturnStatement --------------------------------------
+// ReturnStatement 是 Statement 接口的实现，是AST中的一个节点
+type ReturnStatement struct {
+	Token       token.Token
+	ReturnValue Expression
+}
+
+func (rs *ReturnStatement) statementNode() {}
+
+func (rs *ReturnStatement) TokenLiteral() string { return rs.Token.Literal }
+
+func (rs *ReturnStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString(rs.TokenLiteral() + " ")
+	if rs.ReturnValue != nil {
+		out.WriteString(rs.ReturnValue.String())
+	}
+	out.WriteString(";")
+	return out.String()
+}
+
+type ExpressionStatement struct {
+	Token      token.Token
+	Expression Expression
+}
+
+func (es *ExpressionStatement) String() string {
+	if es.Expression != nil {
+		return es.Expression.String()
+	}
+	return ""
+}
