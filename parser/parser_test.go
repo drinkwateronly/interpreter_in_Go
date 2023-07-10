@@ -314,7 +314,7 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"(((a+(b*c))+(d/e))-f)",
 		},
 		{
-			"3 + 4; -5 * 5",
+			"3 + 4; -5 * 5",git config --global user.name
 			"(3+4)((-5)*5)",
 		},
 		{
@@ -330,6 +330,7 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"((3+(4*5))==((3*1)+(4*5)))",
 		},
 	}
+
 	for _, tt := range tests {
 		l := lexer.New(tt.input)
 		p := New(l)
