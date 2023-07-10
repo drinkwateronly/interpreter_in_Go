@@ -314,7 +314,7 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"(((a+(b*c))+(d/e))-f)",
 		},
 		{
-			"3 + 4; -5 * 5",git config --global user.name
+			"3 + 4; -5 * 5",
 			"(3+4)((-5)*5)",
 		},
 		{

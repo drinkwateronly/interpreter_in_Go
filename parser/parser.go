@@ -40,6 +40,7 @@ func (p *Parser) peekPrecedence() int {
 }
 
 func (p *Parser) curPrecedence() int {
+	// 根据当前curToken.Type确定其优先级
 	if p, ok := precedences[p.curToken.Type]; ok {
 		return p
 	}
@@ -195,7 +196,7 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 	}
 }
 
-// 在parseExpressionStatement中，最低的优先 级会传递给parseExpression。
+// 在parseExpressionStatement中，最低的优先级会传递给parseExpression。
 func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 	stmt.Expression = p.parseExpression(LOWEST)
@@ -207,28 +208,31 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
-// 为了提供更详细的 解析函数 未匹配信息
-func (p *Parser) noPrefixParseFnError(tokenType token.TokenType) {
-	msg := fmt.Sprintf("no prefix parse function for %s found", tokenType)
-	p.errors = append(p.errors, msg)
-}
-
 // parseExpression 解析表达式
 func (p *Parser) parseExpression(precedence int) ast.Expression {
-	// 匹配curToken的Type对应的解析函数
+	// precedence 是前一个token的优先级
+
+	// 首先匹配curToken.Type对应的 前缀解析函数
 	prefix := p.prefixParseFns[p.curToken.Type]
+	// 没有匹配到前缀
 	if prefix == nil {
 		p.noPrefixParseFnError(p.curToken.Type)
 		return nil
 	}
+	// 匹配到了 前缀，当成 左表达式
 	leftExp := prefix()
 
+	// 直到下一个token是分号，或者下一个token优先级更高
 	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		// 匹配到 peekToken.Type对应的 中缀解析函数
 		infix := p.infixParseFns[p.peekToken.Type]
+		// 没有匹配到
 		if infix == nil {
 			return leftExp
 		}
+		// 匹配到了，移动token
 		p.nextToken()
+		// 解析中缀表达式，当成 左表达式，同时前面匹配到的 前缀 就不是左表达式
 		leftExp = infix(leftExp)
 	}
 
@@ -269,6 +273,7 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 }
 
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	// 传入的是左表达式
 	expression := &ast.InfixExpression{
 		Token:    p.curToken,
 		Operator: p.curToken.Literal,
@@ -279,4 +284,10 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	expression.Right = p.parseExpression(precedence)
 
 	return expression
+}
+
+// 为了提供更详细的 解析函数 未匹配信息
+func (p *Parser) noPrefixParseFnError(tokenType token.TokenType) {
+	msg := fmt.Sprintf("no prefix parse function for %s found", tokenType)
+	p.errors = append(p.errors, msg)
 }
