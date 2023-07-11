@@ -83,9 +83,16 @@ func New(l *lexer.Lexer) *Parser {
 	// 注册
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
-	// 注册前缀表达式
+
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
+
+	p.registerPrefix(token.TRUE, p.parseBoolean)
+	p.registerPrefix(token.FALSE, p.parseBoolean)
+
+	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
+
+	p.registerPrefix(token.IF, p.parseIfExpression)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	// 注册中缀表达式
@@ -139,6 +146,88 @@ func (p *Parser) parseStatement() ast.Statement {
 	}
 }
 
+// parseExpressionStatement，最低的优先级会传递给parseExpression。
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	//defer untrace(trace("parseExpressionStatement"))
+
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+// parseExpression 解析表达式，实际的作用是递归构造ast节点
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	// precedence 是前一个token的优先级
+	//defer untrace(trace("parseExpression"))
+	// 【1】首先匹配curToken.Type对应的 前缀解析函数
+	prefix := p.prefixParseFns[p.curToken.Type]
+	// 没有匹配到前缀
+	if prefix == nil {
+		p.noPrefixParseFnError(p.curToken.Type)
+		return nil
+	}
+	// 匹配到了前缀，当成 左表达式
+	leftExp := prefix()
+
+	// 直到下一个token是分号，或者下一个token优先级更低，下⼀个运算符或词法单元的左约束能⼒是否强于当前的右约束能⼒
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		// 【2】然后，匹配 peekToken.Type对应的 中缀解析函数
+		infix := p.infixParseFns[p.peekToken.Type]
+		// 没有匹配到中缀解析函数，则返回匹配到的，作为左表达式的前缀
+		if infix == nil {
+			return leftExp
+		}
+		// 匹配到了，移动token
+		p.nextToken()
+		// 解析中缀表达式，当成 左表达式，同时前面匹配到的 前缀 就不是左表达式
+		leftExp = infix(leftExp)
+	}
+
+	return leftExp
+}
+
+// parsePrefixExpression 解析前缀表达式如 -1 和 !X
+func (p *Parser) parsePrefixExpression() ast.Expression {
+	//defer untrace(trace("parsePrefixExpression"))
+	expression := &ast.PrefixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+	}
+	// 移动token
+	p.nextToken()
+	// 解析下一个token，其表达式作为右表达式
+	expression.Right = p.parseExpression(PREFIX)
+
+	return expression
+}
+
+// parseInfixExpression 解析中缀表达式
+func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	//defer untrace(trace("parseInfixExpression"))
+	// 传入的是左表达式，并初始化
+	expression := &ast.InfixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+		Left:     left,
+	}
+	// 保留当前解析的token的优先级
+	precedence := p.curPrecedence()
+	// 移动token
+	p.nextToken()
+
+	// 解析下一个token，其表达式作为右表达式
+	expression.Right = p.parseExpression(precedence)
+
+	return expression
+}
+
+// ------------------------------------------------------------------------------
+
 // parseLetStatement 解析let开头的语句
 func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.curToken}
@@ -187,56 +276,13 @@ func (p *Parser) peekError(t token.TokenType) {
 }
 
 func (p *Parser) expectPeek(t token.TokenType) bool {
-	if p.peekTokenIs(t) { // 只有后一个的类型正确，才会前移词法单元
+	if p.peekTokenIs(t) { // 只有后一个token的类型正确，才会前移词法单元
 		p.nextToken()
 		return true
 	} else {
 		p.peekError(t)
 		return false
 	}
-}
-
-// 在parseExpressionStatement中，最低的优先级会传递给parseExpression。
-func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
-	stmt := &ast.ExpressionStatement{Token: p.curToken}
-	stmt.Expression = p.parseExpression(LOWEST)
-
-	if p.peekTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt
-}
-
-// parseExpression 解析表达式
-func (p *Parser) parseExpression(precedence int) ast.Expression {
-	// precedence 是前一个token的优先级
-
-	// 首先匹配curToken.Type对应的 前缀解析函数
-	prefix := p.prefixParseFns[p.curToken.Type]
-	// 没有匹配到前缀
-	if prefix == nil {
-		p.noPrefixParseFnError(p.curToken.Type)
-		return nil
-	}
-	// 匹配到了 前缀，当成 左表达式
-	leftExp := prefix()
-
-	// 直到下一个token是分号，或者下一个token优先级更高
-	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
-		// 匹配到 peekToken.Type对应的 中缀解析函数
-		infix := p.infixParseFns[p.peekToken.Type]
-		// 没有匹配到
-		if infix == nil {
-			return leftExp
-		}
-		// 匹配到了，移动token
-		p.nextToken()
-		// 解析中缀表达式，当成 左表达式，同时前面匹配到的 前缀 就不是左表达式
-		leftExp = infix(leftExp)
-	}
-
-	return leftExp
 }
 
 // parseIdentifier 解析 标识符 表达式
@@ -246,6 +292,8 @@ func (p *Parser) parseIdentifier() ast.Expression {
 
 // parseIntegerLiteral 解析 int 表达式
 func (p *Parser) parseIntegerLiteral() ast.Expression {
+	//defer untrace(trace("parseIntegerLiteral"))
+
 	lit := &ast.IntegerLiteral{Token: p.curToken}
 
 	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
@@ -260,30 +308,70 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	return lit
 }
 
-// parsePrefixExpression 解析前缀表达式如 -1 和 !X
-func (p *Parser) parsePrefixExpression() ast.Expression {
-	expression := &ast.PrefixExpression{
-		Token:    p.curToken,
-		Operator: p.curToken.Literal,
-	}
+// parseBoolean 解析 bool
+func (p *Parser) parseBoolean() ast.Expression {
+	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
+}
+
+// parseGroupedExpression 解析 带括号的分组表达式
+func (p *Parser) parseGroupedExpression() ast.Expression {
 	p.nextToken()
-	expression.Right = p.parseExpression(PREFIX)
+	exp := p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	return exp
+}
+
+func (p *Parser) parseIfExpression() ast.Expression {
+	expression := &ast.IfExpression{Token: p.curToken}
+
+	if !p.expectPeek(token.LPAREN) {
+		return nil // 如果下一个不是{
+	}
+
+	// expectPeek内部已经调用了一次nextToken()
+	p.nextToken()
+	// 此时curToken指向了(的后一个Token
+
+	// 解析出条件语句
+	expression.Condition = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil // 如果解析完后，下一个不是),即无法闭环
+	}
+	if !p.expectPeek(token.LBRACE) {
+		return nil // )的下一个不是{,即没有进入Consequence语句
+	}
+	expression.Consequence = p.parseBlockStatement()
+
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken() // 是else
+		if !p.expectPeek(token.LBRACE) {
+			return nil // 但else后没跟{
+		}
+		expression.Alternative = p.parseBlockStatement()
+
+	}
 
 	return expression
 }
 
-func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
-	// 传入的是左表达式
-	expression := &ast.InfixExpression{
-		Token:    p.curToken,
-		Operator: p.curToken.Literal,
-		Left:     left,
-	}
-	precedence := p.curPrecedence()
-	p.nextToken()
-	expression.Right = p.parseExpression(precedence)
+func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{Token: p.curToken}
+	block.Statements = []ast.Statement{}
 
-	return expression
+	p.nextToken()
+
+	// 不 断 调 ⽤ parseStatement ， 直 到 遇 ⻅ 右 ⼤ 括 号 } 或 token.EOF
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		stmt := p.parseStatement()
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+		p.nextToken()
+	}
+	return block
 }
 
 // 为了提供更详细的 解析函数 未匹配信息
