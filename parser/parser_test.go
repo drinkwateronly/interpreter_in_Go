@@ -7,12 +7,14 @@ import (
 	"testing"
 )
 
+// checkParserErrors 检查Parser完成语法分析后，产生了哪些错误
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
+	// 无Error
 	if len(errors) == 0 {
 		return
 	}
-
+	// 有Error
 	t.Errorf("parser has %d errors", len(errors))
 	for _, msg := range errors {
 		t.Errorf("parser error :%q", msg)
@@ -70,10 +72,14 @@ func TestLetStatements(t *testing.T) {
 		{"let foobar = y;", "foobar", "y"},
 	}
 	for _, tt := range tests {
+		// Lexing & Parsing
 		l := lexer.New(tt.input)
 		p := New(l)
 		program := p.ParseProgram()
+		// check Errors
 		checkParserErrors(t, p)
+
+		// test
 		if len(program.Statements) != 1 {
 			t.Fatalf("program.Statements does not contain 1 statements. got=%d",
 				len(program.Statements))
@@ -90,24 +96,28 @@ func TestLetStatements(t *testing.T) {
 }
 
 // LetStatement 是 Statement 接口的实现
-func testLetStatement(t *testing.T, s ast.Statement, name string) bool {
+func testLetStatement(t *testing.T, s ast.Statement, expectedIdentifier string) bool {
+	// 不需要类型断言即可访问的方法
 	if s.TokenLiteral() != "let" {
 		t.Errorf("s.TokenLiteral not 'let. got %q", s.TokenLiteral())
 	}
 
+	// 需要类型断言访问LetStatement的特有属性和方法
 	letStmt, ok := s.(*ast.LetStatement) // 类型断言，但为什么*尚且不清楚
 	if !ok {
 		t.Errorf("s not *ast.LetStatement got=%T", s)
 		return false
 	}
 
-	if letStmt.Name.Value != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.Name.Value)
+	// letStatement中identifier的命名 是否和expectedIdentifier相同
+	if letStmt.Name.Value != expectedIdentifier {
+		t.Errorf("letStmt.Name.Value not '%s'. got=%s", expectedIdentifier, letStmt.Name.Value)
 		return false
 	}
-	if letStmt.Name.TokenLiteral() != name {
+	// 因为identifier的Value和Name.TokenLiteral()一样，所以和上一条判断一样。
+	if letStmt.Name.TokenLiteral() != expectedIdentifier {
 		t.Errorf("letStmt.Name.TokenLiteral() not '%s'. got=%s",
-			name, letStmt.Name.TokenLiteral())
+			expectedIdentifier, letStmt.Name.TokenLiteral())
 		return false
 	}
 	return true

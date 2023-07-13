@@ -33,44 +33,33 @@ var precedences = map[token.TokenType]int{
 	token.LPAREN:   CALL,
 }
 
-func (p *Parser) peekPrecedence() int {
-	if p, ok := precedences[p.peekToken.Type]; ok {
-		return p
-	}
-	return LOWEST
-}
-
-func (p *Parser) curPrecedence() int {
-	// 根据当前curToken.Type确定其优先级
-	if p, ok := precedences[p.curToken.Type]; ok {
-		return p
-	}
-	return LOWEST
-}
-
-type (
-	prefixParseFn func() ast.Expression
-	infixParseFn  func(expression ast.Expression) ast.Expression
-)
-
+// Parser 语法解析器
 type Parser struct {
-	l         *lexer.Lexer
-	errors    []string
-	curToken  token.Token // 当前的token
-	peekToken token.Token // 后一个token，辅助决策
+	l         *lexer.Lexer // 词法解析器
+	errors    []string     // 记录解析出现的所有的错误，不会因为出现一个错误停止解析
+	curToken  token.Token  // 当前的token
+	peekToken token.Token  // 后一个token，辅助决策
 
-	prefixParseFns map[token.TokenType]prefixParseFn
-	infixParseFns  map[token.TokenType]infixParseFn
+	prefixParseFns map[token.TokenType]prefixParseFn // 记录所有前缀表达式解析函数
+	infixParseFns  map[token.TokenType]infixParseFn  // 记录所有中缀表达式解析函数
 }
 
-func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
-	p.prefixParseFns[tokenType] = fn
+// ParseProgram 对整个源代码进行解析，遍历所有的词法单元，返回*ast.Program，内部存了所有的AST
+func (p *Parser) ParseProgram() *ast.Program {
+	program := &ast.Program{}
+	program.Statements = []ast.Statement{} // 存放所有的ast节点
+
+	for p.curToken.Type != token.EOF {
+		stmt := p.parseStatement() // 每次解析一条表达式
+		if stmt != nil {
+			program.Statements = append(program.Statements, stmt)
+		}
+		p.nextToken()
+	}
+	return program
 }
 
-func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
-	p.infixParseFns[tokenType] = fn
-}
-
+// New 创建语法解析器，参数为词法解析器Lexer
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:      l,
@@ -113,41 +102,16 @@ func New(l *lexer.Lexer) *Parser {
 	return p
 }
 
-func (p *Parser) Errors() []string {
-	return p.errors
-}
-
-// 移动curToken与peekToken
-func (p *Parser) nextToken() {
-	p.curToken = p.peekToken
-	p.peekToken = p.l.NextToken()
-}
-
-// ParseProgram 对整个源代码进行解析，遍历所有的词法单元
-func (p *Parser) ParseProgram() *ast.Program {
-	program := &ast.Program{}
-	program.Statements = []ast.Statement{} // 存放所有的ast节点
-
-	for p.curToken.Type != token.EOF {
-		stmt := p.parseStatement() // 每次解析一条表达式
-		if stmt != nil {
-			program.Statements = append(program.Statements, stmt)
-		}
-		p.nextToken()
-	}
-	return program
-}
-
-// parseStatement 对单个表达式进行解析
+// parseStatement 对单个语句进行解析
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
+	// 只有两个Statement语句，剩下的是表达式语句ExpressionStatement，实际上就是表达式
 	case token.LET:
 		return p.parseLetStatement()
 	case token.RETURN:
 		return p.parseReturnStatement()
 	default:
 		return p.parseExpressionStatement()
-
 	}
 }
 
@@ -268,31 +232,6 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 		p.nextToken()
 	}
 	return stmt
-}
-
-// 小工具1，判断当前token的token.TokenType
-func (p *Parser) curTokenIs(t token.TokenType) bool {
-	return p.curToken.Type == t
-}
-
-// 小工具2，判断下一个token的token.TokenType
-func (p *Parser) peekTokenIs(t token.TokenType) bool {
-	return p.peekToken.Type == t
-}
-
-func (p *Parser) peekError(t token.TokenType) {
-	msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
-	p.errors = append(p.errors, msg) // 记录error
-}
-
-func (p *Parser) expectPeek(t token.TokenType) bool {
-	if p.peekTokenIs(t) { // 只有后一个token的类型正确，才会前移词法单元
-		p.nextToken()
-		return true
-	} else {
-		p.peekError(t)
-		return false
-	}
 }
 
 // parseIdentifier 解析 标识符 表达式
@@ -452,7 +391,76 @@ func (p *Parser) parseCallArguments() []ast.Expression {
 	return args
 }
 
-// 为了提供更详细的 解析函数 未匹配信息
+// ----------------------------- tools -----------------------------
+// 移动curToken与peekToken
+func (p *Parser) nextToken() {
+	p.curToken = p.peekToken
+	p.peekToken = p.l.NextToken()
+}
+
+// 小工具1，判断当前token的token.TokenType
+func (p *Parser) curTokenIs(t token.TokenType) bool {
+	return p.curToken.Type == t
+}
+
+// 小工具2，判断下一个token的token.TokenType
+func (p *Parser) peekTokenIs(t token.TokenType) bool {
+	return p.peekToken.Type == t
+}
+
+// 判断下一个token是否是期待的token
+func (p *Parser) expectPeek(t token.TokenType) bool {
+	if p.peekTokenIs(t) { // 只有后一个token的类型正确，才会前移词法单元
+		p.nextToken()
+		return true
+	} else {
+		p.peekError(t) // 添加错误
+		return false
+	}
+}
+
+func (p *Parser) peekPrecedence() int {
+	if p, ok := precedences[p.peekToken.Type]; ok {
+		return p
+	}
+	return LOWEST
+}
+
+func (p *Parser) curPrecedence() int {
+	// 根据当前curToken.Type确定其优先级
+	if p, ok := precedences[p.curToken.Type]; ok {
+		return p
+	}
+	return LOWEST
+}
+
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(expression ast.Expression) ast.Expression
+)
+
+func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
+}
+
+// ---------------- errors -------------------
+
+// Errors 返回Parser记录的Errors
+func (p *Parser) Errors() []string {
+	return p.errors
+}
+
+// peekError 当期待的词法单元没匹配上，为Parser记录错误
+func (p *Parser) peekError(t token.TokenType) {
+	msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
+	p.errors = append(p.errors, msg) // 记录error
+}
+
+// noPrefixParseFnError 为了提供更详细的 解析函数 未匹配信息
 func (p *Parser) noPrefixParseFnError(tokenType token.TokenType) {
 	msg := fmt.Sprintf("no prefix parse function for %s found", tokenType)
 	p.errors = append(p.errors, msg)

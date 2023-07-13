@@ -22,16 +22,18 @@ type Expression interface {
 	expressionNode()
 }
 
-// 存放语法分析器⽣成的每个AST的根节点，每个程序有多个AST
+// Program ------------------------------------------
+// Program 是 Node 接口的实现
 type Program struct {
-	Statements []Statement
+	Statements []Statement // 存放的是AST的根节点。注意，每一条语句可以构成一AST，所以是切片
 }
 
+// TokenLiteral 返回第一个AST的根节点的TokenLiteral()，仅用于只有一个Statement的情况
 func (p *Program) TokenLiteral() string {
 	if len(p.Statements) > 0 {
 		return p.Statements[0].TokenLiteral()
 	} else {
-		return ""
+		return "" // 这表示AST并没有根节点，AST是空的，即源码是空的。
 	}
 }
 
@@ -43,11 +45,12 @@ func (p *Program) String() string {
 	return out.String()
 }
 
-// LetStatement 是 Statement 接口的实现，是AST中的一个节点
+// LetStatement ------------------------------------------
+// LetStatement 是 Statement 接口的实现
 type LetStatement struct {
-	Token token.Token // 标识符的token类型
-	Name  *Identifier // 保存绑定的标识符，但其内部也有token类型？
-	Value Expression  // 保存产生值的表达式/或者值本身，为了保持简单，所以没有将两者区分开
+	Token token.Token // the token.LET token
+	Name  *Identifier // 保存绑定的标识符
+	Value Expression  // 保存产生值的表达式/或者值本身，不理解的是为何没有*
 }
 
 func (ls *LetStatement) statementNode() {}
@@ -71,8 +74,8 @@ func (ls *LetStatement) String() string {
 // Identifier --------------------------------------
 // Identifier 是 Expression 接口的实现
 type Identifier struct {
-	Token token.Token
-	Value string
+	Token token.Token // the token.IDNET token
+	Value string      // 和 Token.Literal 一样 是Identifier的命名
 }
 
 func (i *Identifier) expressionNode() {}
