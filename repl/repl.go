@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"Monkey_1/evaluator"
 	"Monkey_1/lexer"
 	"Monkey_1/parser"
 	"bufio"
@@ -36,11 +37,24 @@ func Start(in io.Reader, out io.Writer) {
 			printParseErrors(out, p.Errors())
 			continue
 		}
-		io.WriteString(out, program.String())
-		io.WriteString(out, "\n")
-		//for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
-		//	fmt.Fprintf(out, "%+v\n", tok)
-		//}
+		/*
+			// Read-lexing-Print-loop
+			for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
+				fmt.Fprintf(out, "%+v\n", tok)
+			}
+		*/
+
+		/*
+			// Read-Parsing-Print-loop (RPPL)
+			io.WriteString(out, program.String())
+			io.WriteString(out, "\n")
+		*/
+		evaluated := evaluator.Eval(program)
+		if evaluated != nil {
+			io.WriteString(out, evaluated.Inspect())
+			io.WriteString(out, "\n")
+		}
+
 	}
 }
 

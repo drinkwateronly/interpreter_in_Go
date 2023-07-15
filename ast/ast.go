@@ -46,7 +46,7 @@ func (p *Program) String() string {
 }
 
 // LetStatement ------------------------------------------
-// LetStatement 是 Statement 接口的实现 1
+// LetStatement 是 Statement 接口的实现
 type LetStatement struct {
 	Token token.Token // the token.LET token
 	Name  *Identifier // 保存绑定的标识符
