@@ -13,14 +13,14 @@ var (
 )
 
 // Eval 输入ast.Node，内部求值，返回一个值的表达 object.Object
-func Eval(node ast.Node) object.Object {
+func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	// 语句
 	case *ast.Program:
 		//return evalStatements(node.Statements)
-		return evalProgram(node)
+		return evalProgram(node, env)
 	case *ast.ExpressionStatement:
-		return Eval(node.Expression)
+		return Eval(node.Expression, env)
 
 	// 表达式
 	case *ast.IntegerLiteral:
@@ -35,15 +35,15 @@ func Eval(node ast.Node) object.Object {
 		return FALSE
 
 	case *ast.PrefixExpression:
-		right := Eval(node.Right)
+		right := Eval(node.Right, env)
 		if isError(right) {
 			return right // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
 		return evalPrefixExpression(node.Operator, right)
 
 	case *ast.InfixExpression:
-		left := Eval(node.Left)
-		right := Eval(node.Right)
+		left := Eval(node.Left, env)
+		right := Eval(node.Right, env)
 		if isError(left) {
 			return left // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
@@ -54,24 +54,38 @@ func Eval(node ast.Node) object.Object {
 
 	case *ast.BlockStatement: // ？
 		//return evalStatements(node.Statements)
-		return evalBlockStatement(node)
+		return evalBlockStatement(node, env)
 
 	case *ast.IfExpression:
-		return evalIfExpression(node)
+		return evalIfExpression(node, env)
 
 	case *ast.ReturnStatement:
-		val := Eval(node.ReturnValue)
+		val := Eval(node.ReturnValue, env)
 		if isError(val) {
 			return val // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
 		return &object.ReturnValue{Value: val}
+	case *ast.LetStatement:
+		val := Eval(node.Value, env)
+		if isError(val) {
+			return val
+		}
+		env.Set(node.Name.Value, val)
 
+	case *ast.Identifier:
+		return evalIdentifier(node, env)
+
+	case *ast.FunctionLiteral:
+		params := node.Parameters
+		body := node.Body
+		return &object.Function{Parameters: params, Env: env, Body: body}
 	}
 
 	return nil
 }
 
 // 淘汰 P369 因为可能出现嵌套if都有return时，遇到第一个return就会返回
+/*
 func evalStatements(stmts []ast.Statement) object.Object {
 	var result object.Object
 	for _, statement := range stmts { // ？
@@ -84,6 +98,7 @@ func evalStatements(stmts []ast.Statement) object.Object {
 	}
 	return result
 }
+*/
 
 func evalPrefixExpression(operator string, right object.Object) object.Object {
 	switch operator {
@@ -203,15 +218,15 @@ func nativeBoolToBooleanObject(b bool) object.Object {
 	return FALSE
 }
 
-func evalIfExpression(ie *ast.IfExpression) object.Object {
-	condition := Eval(ie.Condition)
+func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Object {
+	condition := Eval(ie.Condition, env)
 	if isError(condition) {
 		return condition
 	}
 	if isTrue(condition) {
-		return Eval(ie.Consequence)
+		return Eval(ie.Consequence, env)
 	} else if ie.Alternative != nil {
-		return Eval(ie.Alternative)
+		return Eval(ie.Alternative, env)
 	} else {
 		return NULL
 	}
@@ -231,10 +246,10 @@ func isTrue(condition object.Object) bool {
 }
 
 // evalProgram P369-P370 较为重要 降低通用性？
-func evalProgram(program *ast.Program) object.Object {
+func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	var result object.Object
 	for _, statement := range program.Statements {
-		result = Eval(statement)
+		result = Eval(statement, env)
 
 		switch result := result.(type) {
 		case *object.ReturnValue:
@@ -247,10 +262,10 @@ func evalProgram(program *ast.Program) object.Object {
 }
 
 // ?
-func evalBlockStatement(bs *ast.BlockStatement) object.Object {
+func evalBlockStatement(bs *ast.BlockStatement, env *object.Environment) object.Object {
 	var result object.Object
 	for _, statement := range bs.Statements {
-		result = Eval(statement)
+		result = Eval(statement, env)
 		if result != nil {
 			resultType := result.Type()
 			if resultType == object.RETURN_VALUE_OBJ || resultType == object.ERROR_OBJ {
@@ -259,6 +274,15 @@ func evalBlockStatement(bs *ast.BlockStatement) object.Object {
 		}
 	}
 	return result
+
+}
+
+func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
+	val, ok := env.Get(node.Value)
+	if !ok {
+		return newError("identifier not found: " + node.Value)
+	}
+	return val
 
 }
 

@@ -1,6 +1,11 @@
 package object
 
-import "fmt"
+import (
+	"Monkey_1/ast"
+	"bytes"
+	"fmt"
+	"strings"
+)
 
 type ObjectType string
 
@@ -10,12 +15,35 @@ const (
 	NULL_OBJ         = "NULL"
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
 	ERROR_OBJ        = "ERROR"
+	FUNCTION_OBJ     = "FUNCTION"
 )
 
 // 每个值有不同表现形式，因此使用接口会比使用多个字段的结构体简洁
 type Object interface {
 	Type() ObjectType
 	Inspect() string
+}
+
+// Environment ##############################################
+type Environment struct {
+	store map[string]Object
+}
+
+// 为什么不直接使⽤map，⽽是使⽤封装
+
+func NewEnvironment() *Environment {
+	s := make(map[string]Object)
+	return &Environment{store: s}
+}
+
+func (e *Environment) Get(name string) (Object, bool) {
+	obj, ok := e.store[name]
+	return obj, ok
+}
+
+func (e *Environment) Set(name string, obj Object) Object {
+	e.store[name] = obj
+	return obj
 }
 
 // Integer ##############################################
@@ -60,3 +88,27 @@ type Error struct {
 func (e *Error) Inspect() string { return "ERROR: " + e.Message }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
+
+// Function #################################################
+type Function struct {
+	Parameters []*ast.Identifier
+	Body       *ast.BlockStatement
+	Env        *Environment // 目前理解为作用域
+}
+
+func (f *Function) Inspect() string {
+	var out bytes.Buffer
+	params := []string{}
+	for _, p := range f.Parameters {
+		params = append(params, p.String())
+	}
+	out.WriteString("fn")
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") {\n")
+	out.WriteString(f.Body.String())
+	out.WriteString("\n}")
+	return out.String()
+}
+
+func (f *Function) Type() ObjectType { return FUNCTION_OBJ }

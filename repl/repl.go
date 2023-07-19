@@ -3,6 +3,7 @@ package repl
 import (
 	"Monkey_1/evaluator"
 	"Monkey_1/lexer"
+	"Monkey_1/object"
 	"Monkey_1/parser"
 	"bufio"
 	"fmt"
@@ -20,8 +21,10 @@ const BRAND = ` __  __  ___  _   _ _  _________   __
 
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
+	env := object.NewEnvironment()
 
 	for {
+
 		fmt.Fprintf(out, PROMPT)
 		scanned := scanner.Scan() // 从 in 读入下一行 ，并移除行末的换行符
 		if !scanned {
@@ -49,7 +52,9 @@ func Start(in io.Reader, out io.Writer) {
 			io.WriteString(out, program.String())
 			io.WriteString(out, "\n")
 		*/
-		evaluated := evaluator.Eval(program)
+
+		evaluated := evaluator.Eval(program, env)
+
 		if evaluated != nil {
 			io.WriteString(out, evaluated.Inspect())
 			io.WriteString(out, "\n")
