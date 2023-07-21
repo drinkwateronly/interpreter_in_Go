@@ -523,6 +523,30 @@ func TestCallExpressionParsing(t *testing.T) {
 	testInfixExpression(t, exp.Arguments[2], 4, "+", 5)
 }
 
+func TestStringLiteralParsing(t *testing.T) {
+	input := `"hello world!"`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("stmt is not ast.ExpressionStatement. got=%T", program.Statements[0])
+	}
+	exp, ok := stmt.Expression.(*ast.StringLiteral)
+	if !ok {
+		t.Fatalf("exp is not *ast.StringLiteral, got=%T", stmt.Expression)
+	}
+	if exp.String() != "hello world!" {
+		t.Fatalf("exp.Value not %q. got=%q", "hello world!", exp.Value)
+	}
+	if exp.Token.Literal != "hello world!" {
+		t.Fatalf("exp.Token.Literal not %q. got=%q", "hello world!", exp.Token.Literal)
+	}
+
+}
+
 // 辅助测试函数
 func testLetStatement(t *testing.T, s ast.Statement, expectedIdentifier string) bool {
 	// 不需要类型断言即可访问的方法

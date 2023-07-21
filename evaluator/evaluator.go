@@ -91,6 +91,9 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		}
 
 		return applyFunction(function, args)
+
+	case *ast.StringLiteral:
+		return &object.String{Value: node.Value}
 	}
 
 	return nil
@@ -167,6 +170,10 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 		// 对 于 *object.Integer ， 总 是 有 新 分 配 的 object.Integer实例，也就是使⽤新的指针。⽽整数不
 		//能通过⽐较不同的实例之间的指针来判断相等性，否则5 1+== 5将为false。这不是我们期望的⾏为。
 		return evalIntegerInfixExpression(operator, left, right)
+	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
+		// 对 于 *object.Integer ， 总 是 有 新 分 配 的 object.Integer实例，也就是使⽤新的指针。⽽整数不
+		//能通过⽐较不同的实例之间的指针来判断相等性，否则5 1+== 5将为false。这不是我们期望的⾏为。
+		return evalStringInfixExpression(operator, left, right)
 	case operator == "==":
 		// 直接对比object本身，其中包括了对比值与类型，这之所以可⾏，是因为程序中⼀直都在使⽤
 		// 指向对象的指针，⽽布尔值只有TRUE和FALSE两个对象。 这也适⽤于NULL，但不适用于整数或其他。
@@ -208,6 +215,15 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 		//return NULL
 		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
+}
+
+func evalStringInfixExpression(operator string, left, right object.Object) object.Object {
+	if operator != "+" {
+		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
+	}
+	leftValue := left.(*object.String).Value
+	rightValue := right.(*object.String).Value
+	return &object.String{Value: leftValue + rightValue}
 }
 
 func evalBooleanInfixExpression(operator string, left, right object.Object) object.Object {

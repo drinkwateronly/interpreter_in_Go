@@ -75,6 +75,7 @@ func New(l *lexer.Lexer) *Parser {
 	// 注册前缀表达式
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+	p.registerPrefix(token.STRING, p.parseStringLiteral)
 
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
@@ -268,6 +269,11 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	// 实际值
 	lit.Value = value
 	return lit
+}
+
+func (p *Parser) parseStringLiteral() ast.Expression {
+	//defer untrace(trace("parseStringLiteral"))
+	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 // parseBoolean 解析 bool
