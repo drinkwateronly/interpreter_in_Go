@@ -236,7 +236,7 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 		Operator: p.curToken.Literal,
 		Left:     left,
 	}
-	// 保留当前解析的token的优先级
+	// 保留当前解析的token的优先级，因为接下来要移动token
 	precedence := p.curPrecedence()
 	// 移动token
 	p.nextToken()
