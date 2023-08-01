@@ -76,13 +76,14 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.STRING, p.parseStringLiteral)
-
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
+	// 分组表达式 - 带括号的表达式分组
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
+	// 解析函数字面值
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
@@ -95,7 +96,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
-
+	// 解析调用表达式，属于中缀表达式解析函数
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 	return p
 }
@@ -147,7 +148,7 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 	// 解析表达式
 	letStmt.Value = p.parseExpression(LOWEST)
 	// 循环剩余的token，直到是分号，这是因为parseExpression不移动token。
-	for p.peekTokenIs(token.SEMICOLON) {
+	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 	// 返回&ast.LetStatement的ast节点
@@ -163,7 +164,7 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 	// 解析表达式
 	returnStmt.ReturnValue = p.parseExpression(LOWEST)
 	// 循环剩余的token，直到是分号，这是因为parseExpression不移动token。
-	for !p.curTokenIs(token.SEMICOLON) {
+	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 	return returnStmt
@@ -293,33 +294,30 @@ func (p *Parser) parseGroupedExpression() ast.Expression {
 
 func (p *Parser) parseIfExpression() ast.Expression {
 	expression := &ast.IfExpression{Token: p.curToken}
-
+	// 一步步构建IfExpression节点，此时curToken是if
 	if !p.expectPeek(token.LPAREN) {
-		return nil // 如果下一个不是{
+		return nil // 如果下一个不是(
 	}
-
-	// expectPeek内部已经调用了一次nextToken()
-	p.nextToken()
-	// 此时curToken指向了(的后一个Token
-
+	// expectPeek内部已经调用了一次nextToken(), 指向了(
+	p.nextToken() // 在调用一次，指向(后的token
 	// 解析出条件语句
 	expression.Condition = p.parseExpression(LOWEST)
-
 	if !p.expectPeek(token.RPAREN) {
 		return nil // 如果解析完后，下一个不是),即无法闭环
 	}
+
 	if !p.expectPeek(token.LBRACE) {
 		return nil // )的下一个不是{,即没有进入Consequence语句
 	}
 	expression.Consequence = p.parseBlockStatement()
 
-	if p.peekTokenIs(token.ELSE) {
-		p.nextToken() // 是else
+	if p.peekTokenIs(token.ELSE) { // 有else
+		p.nextToken() // curToken是else
 		if !p.expectPeek(token.LBRACE) {
-			return nil // 但else后没跟{
+			return nil // 但else后没跟{，
 		}
+		// curToken是{
 		expression.Alternative = p.parseBlockStatement()
-
 	}
 
 	return expression
@@ -331,7 +329,7 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 
 	p.nextToken()
 
-	// 不 断 调 ⽤ parseStatement ， 直 到 遇 ⻅ 右 ⼤ 括 号 } 或 token.EOF
+	// 不断parseStatement，直到遇⻅ } 或 token.EOF，这和ParseProgram很类似
 	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
 		stmt := p.parseStatement()
 		if stmt != nil {
@@ -347,13 +345,18 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
+	// 解析出的是标识符ast.Identifier列表
 	lit.Parameters = p.parseFunctionParameters()
 
 	if !p.expectPeek(token.LBRACE) {
 		return nil
 	}
 	lit.Body = p.parseBlockStatement()
-
+	if !p.curTokenIs(token.RBRACE) {
+		msg := fmt.Sprintf("expected curToken to be %s, got %s instead", token.RBRACE, p.curToken.Literal) // --------------------------------------
+		p.errors = append(p.errors, msg)
+		return nil
+	}
 	return lit
 }
 
@@ -369,6 +372,8 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 	ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 	identifiers = append(identifiers, ident)
 
+	// 为什么不用expectedPeek？
+	// 因为它在没有peek到时会添加错误，而这里没有peek仅表示参数标识符已经解析完毕。
 	for p.peekTokenIs(token.COMMA) {
 		p.nextToken()
 		p.nextToken()
@@ -390,14 +395,15 @@ func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 
 func (p *Parser) parseCallArguments() []ast.Expression {
 	args := []ast.Expression{}
-
+	// 无参数情况
 	if p.peekTokenIs(token.RPAREN) {
 		p.nextToken()
 		return args
 	}
+	// curToken为(
 	p.nextToken()
 	args = append(args, p.parseExpression(LOWEST))
-
+	// curToken为,的前一个
 	for p.peekTokenIs(token.COMMA) {
 		p.nextToken()
 		p.nextToken()

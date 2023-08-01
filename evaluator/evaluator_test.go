@@ -8,14 +8,13 @@ import (
 )
 
 func testEval(input string) object.Object {
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-	env := object.NewEnvironment()
-	return Eval(program, env)
+	l := lexer.New(input)          // 创建词法分析器
+	p := parser.New(l)             // 创建语法分析器
+	program := p.ParseProgram()    // 解析源码
+	env := object.NewEnvironment() // 新建环境
+	return Eval(program, env)      // 求值
 }
 
-// ##############################################
 func TestEvalIntegerExpression(t *testing.T) {
 	test := []struct {
 		input    string
@@ -51,21 +50,6 @@ func TestEvalIntegerExpression(t *testing.T) {
 	}
 }
 
-func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
-	result, ok := obj.(*object.Integer)
-	if !ok {
-		t.Errorf("object is not Integer. got=%T (%+v)", obj, obj)
-		return false
-	}
-
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%d, expected=%d", result.Value, expected)
-		return false
-	}
-	return true
-}
-
-// ##############################################
 func TestEvalBooleanExpression(t *testing.T) {
 	test := []struct {
 		input    string
@@ -84,23 +68,6 @@ func TestEvalBooleanExpression(t *testing.T) {
 	}
 }
 
-func testBooleanObject(t *testing.T, obj object.Object, expected bool) bool {
-	result, ok := obj.(*object.Boolean)
-	if !ok {
-		t.Errorf("object is not Boolean. got=%T (%+v)", obj, obj)
-		// %+v: object is not Boolean. got=*object.Integer (&{Value:1})
-		// %v: object is not Boolean. got=*object.Integer (&{1})
-		return false
-	}
-
-	if result.Value != expected {
-		t.Errorf("object has wrong value. got=%t, expected=%t", result.Value, expected)
-		return false
-	}
-	return true
-}
-
-// ##############################################
 func TestBangOperator(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -159,15 +126,6 @@ func TestIfElseExpressions(t *testing.T) {
 			testNullObject(t, evaluated)
 		}
 	}
-}
-
-func testNullObject(t *testing.T, evaluated object.Object) bool {
-	//if evaluated.Type() != object.NULL_OBJ { // 解包了，速度慢些
-	if evaluated != NULL {
-		t.Errorf("object is not NULL. got=%T (%+v)", evaluated, evaluated)
-		return false
-	}
-	return true
 }
 
 // ##############################################
@@ -369,4 +327,44 @@ func TestBuiltinFunctions(t *testing.T) {
 		}
 	}
 
+}
+
+func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
+	// 类型断言
+	result, ok := obj.(*object.Integer)
+	if !ok {
+		t.Errorf("object is not Integer. got=%T (%+v)", obj, obj)
+		return false
+	}
+	// 判断值
+	if result.Value != expected {
+		t.Errorf("object has wrong value. got=%d, expected=%d", result.Value, expected)
+		return false
+	}
+	return true
+}
+
+func testBooleanObject(t *testing.T, obj object.Object, expected bool) bool {
+	result, ok := obj.(*object.Boolean)
+	if !ok {
+		t.Errorf("object is not Boolean. got=%T (%+v)", obj, obj)
+		// %+v: object is not Boolean. got=*object.Integer (&{Value:1})
+		// %v: object is not Boolean. got=*object.Integer (&{1})
+		return false
+	}
+
+	if result.Value != expected {
+		t.Errorf("object has wrong value. got=%t, expected=%t", result.Value, expected)
+		return false
+	}
+	return true
+}
+
+func testNullObject(t *testing.T, evaluated object.Object) bool {
+	//if evaluated.Type() != object.NULL_OBJ { // 解包了，速度慢些
+	if evaluated != NULL {
+		t.Errorf("object is not NULL. got=%T (%+v)", evaluated, evaluated)
+		return false
+	}
+	return true
 }

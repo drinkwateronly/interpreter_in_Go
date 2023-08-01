@@ -6,25 +6,20 @@ import (
 	"fmt"
 )
 
+// 实例，此后的这些值都是指向这些实例的，无需额外新建实例。
 var (
 	TRUE  = &object.Boolean{Value: true}
 	FALSE = &object.Boolean{Value: false}
 	NULL  = &object.Null{}
 )
 
-//var builtins = map[string]*object.Builtin{
-//	"len": &object.Builtin{
-//		Fn: func(args ...object.Object) object.Object {
-//			return NULL
-//		},
-//	},
-//}
-
 // Eval 输入ast.Node，内部求值，返回一个值的表达 object.Object
 func Eval(node ast.Node, env *object.Environment) object.Object {
+	// node的类型断言
 	switch node := node.(type) {
-	// 语句
+	// AST的根节点
 	case *ast.Program:
+		// evalStatements 会逐行执行代码，并没有考虑嵌套，导致嵌套遇到return时，会立即返回第一个return
 		//return evalStatements(node.Statements)
 		return evalProgram(node, env)
 	case *ast.ExpressionStatement:
@@ -72,7 +67,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		if isError(val) {
 			return val // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
-		return &object.ReturnValue{Value: val}
+		return &object.ReturnValue{Value: val} // return 终止了Eval的执行
 	case *ast.LetStatement:
 		val := Eval(node.Value, env)
 		if isError(val) {
@@ -108,7 +103,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 }
 
 // 淘汰 P369 因为可能出现嵌套if都有return时，遇到第一个return就会返回
-/*
+/* > ⾸先要注意的就是不能通过复⽤ evalStatements函数对块语句求值。需要将它重命名为 evalProgram，降低其通⽤性
 func evalStatements(stmts []ast.Statement) object.Object {
 	var result object.Object
 	for _, statement := range stmts { // ？
@@ -137,6 +132,7 @@ func evalPrefixExpression(operator string, right object.Object) object.Object {
 }
 
 func evalBangOperatorExpression(right object.Object) object.Object {
+	// 接受所有的object，无需判断
 	switch right {
 	case TRUE:
 		return FALSE
@@ -144,7 +140,7 @@ func evalBangOperatorExpression(right object.Object) object.Object {
 		return TRUE
 	case NULL:
 		return TRUE
-	default:
+	default: // 其他值一律为TRUE，因此返回FALSE
 		return FALSE
 	}
 }
@@ -175,12 +171,10 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 	*/
 	switch {
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
-		// 对 于 *object.Integer ， 总 是 有 新 分 配 的 object.Integer实例，也就是使⽤新的指针。⽽整数不
-		//能通过⽐较不同的实例之间的指针来判断相等性，否则5 1+== 5将为false。这不是我们期望的⾏为。
+		// 对 于 *object.Integer，总是有新分配的object.Integer实例，也就是使⽤新的指针。⽽整数不
+		// 能通过⽐较不同的实例之间的指针来判断相等性，否则5 == 5将为false。这不是我们期望的⾏为。
 		return evalIntegerInfixExpression(operator, left, right)
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
-		// 对 于 *object.Integer ， 总 是 有 新 分 配 的 object.Integer实例，也就是使⽤新的指针。⽽整数不
-		//能通过⽐较不同的实例之间的指针来判断相等性，否则5 1+== 5将为false。这不是我们期望的⾏为。
 		return evalStringInfixExpression(operator, left, right)
 	case operator == "==":
 		// 直接对比object本身，其中包括了对比值与类型，这之所以可⾏，是因为程序中⼀直都在使⽤
@@ -234,6 +228,7 @@ func evalStringInfixExpression(operator string, left, right object.Object) objec
 	return &object.String{Value: leftValue + rightValue}
 }
 
+/* 在evalInfixExpression 已经实现了
 func evalBooleanInfixExpression(operator string, left, right object.Object) object.Object {
 	leftValue := left.(*object.Boolean).Value
 	rightValue := right.(*object.Boolean).Value
@@ -246,13 +241,7 @@ func evalBooleanInfixExpression(operator string, left, right object.Object) obje
 		return NULL
 	}
 }
-
-func nativeBoolToBooleanObject(b bool) object.Object {
-	if b {
-		return TRUE
-	}
-	return FALSE
-}
+*/
 
 func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Object {
 	condition := Eval(ie.Condition, env)
@@ -269,6 +258,7 @@ func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Obje
 }
 
 func isTrue(condition object.Object) bool {
+	// Monkey中，真值为既不是空 又不是false的值，即不一定是true
 	switch condition {
 	case NULL:
 		return false
@@ -281,10 +271,11 @@ func isTrue(condition object.Object) bool {
 	}
 }
 
-// evalProgram P369-P370 较为重要 降低通用性？
+// evalProgram P369-P370 较为重要 降低通用性
 func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	var result object.Object
 	for _, statement := range program.Statements {
+		// 对每个statement eval，
 		result = Eval(statement, env)
 
 		switch result := result.(type) {
@@ -294,7 +285,7 @@ func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 			return result
 		}
 	}
-	return result
+	return result // 作为解释器，通常只返回最后一个语句的求值
 }
 
 // ?
@@ -304,6 +295,7 @@ func evalBlockStatement(bs *ast.BlockStatement, env *object.Environment) object.
 		result = Eval(statement, env)
 		if result != nil {
 			resultType := result.Type()
+			// 是返回值，或有错误时，立刻返回
 			if resultType == object.RETURN_VALUE_OBJ || resultType == object.ERROR_OBJ {
 				return result
 			}
@@ -375,4 +367,11 @@ func isError(obj object.Object) bool {
 		return obj.Type() == object.ERROR_OBJ
 	}
 	return false
+}
+
+func nativeBoolToBooleanObject(b bool) object.Object {
+	if b {
+		return TRUE
+	}
+	return FALSE
 }

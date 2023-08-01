@@ -180,14 +180,17 @@ func TestIntegerLiteralExpression(t *testing.T) {
 	}
 }
 
+// TestParsingPrefixExpressions 测试前缀表达式PrefixExpressions
 func TestParsingPrefixExpressions(t *testing.T) {
 	prefixTests := []struct {
-		input        string
-		operator     string
-		integerValue int64
+		input    string
+		operator string
+		value    interface{}
 	}{
 		{"!5", "!", 5},
 		{"-20", "-", 20},
+		{"!true;", "!", true},
+		{"!false;", "!", false},
 	}
 
 	for _, tt := range prefixTests {
@@ -195,25 +198,26 @@ func TestParsingPrefixExpressions(t *testing.T) {
 		p := New(l)
 		program := p.ParseProgram()
 		checkParserErrors(t, p)
-
+		// 解析出大于1条语句
 		if len(program.Statements) != 1 {
 			t.Fatalf("program has not enough statements. got=%d", len(program.Statements))
 		}
-		stmt, ok := program.Statements[0].(*ast.ExpressionStatement) // 类型断言
 
+		stmt, ok := program.Statements[0].(*ast.ExpressionStatement) // 类型断言
 		if !ok {
 			t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.Statements[0])
 		}
 
 		exp, ok := stmt.Expression.(*ast.PrefixExpression)
-
 		if !ok {
 			t.Fatalf("stmt is not *ast.IntegerLiteral. got=%T", stmt.Expression)
 		}
+
 		if exp.Operator != tt.operator {
 			t.Fatalf("exp.Operator is not '%s'. got=%s", tt.operator, exp.Operator)
 		}
-		if !testIntegerLiteral(t, exp.Right, tt.integerValue) {
+		// 交给testLiteralExpression测试exp.Right
+		if !testLiteralExpression(t, exp.Right, tt.value) {
 			return
 		}
 	}
@@ -258,7 +262,9 @@ func TestParsingInfixExpressions(t *testing.T) {
 	}
 }
 
+// TestOperatorPrecedenceParsing 测试分组表达式，测试String()返回的带括号的表达式
 func TestOperatorPrecedenceParsing(t *testing.T) {
+	// 通过Program节点实现的string方法，判断解析树是否
 	tests := []struct {
 		input    string
 		expected string
@@ -437,19 +443,23 @@ func TestFunctionLiteralParsing(t *testing.T) {
 			stmt.Expression)
 	}
 
+	// 参数数量是否为2
 	if len(function.Parameters) != 2 {
 		t.Fatalf("function literal parameters wrong. want 2, got=%d\n",
 			len(function.Parameters))
 	}
 
+	// 进入testLiteralExpression测试标识符
 	testLiteralExpression(t, function.Parameters[0], "x")
 	testLiteralExpression(t, function.Parameters[1], "y")
 
+	// 只有一个Statements
 	if len(function.Body.Statements) != 1 {
 		t.Fatalf("function.Body.Statements has not 1 statements. got=%d\n",
 			len(function.Body.Statements))
 	}
 
+	// 类型断言ExpressionStatement
 	bodyStmt, ok := function.Body.Statements[0].(*ast.ExpressionStatement)
 	if !ok {
 		t.Fatalf("function body stmt is not ast.ExpressionStatement. got=%T",
@@ -548,6 +558,7 @@ func TestStringLiteralParsing(t *testing.T) {
 }
 
 // 辅助测试函数
+// testLetStatement
 func testLetStatement(t *testing.T, s ast.Statement, expectedIdentifier string) bool {
 	// 不需要类型断言即可访问的方法
 	if s.TokenLiteral() != "let" {
@@ -575,6 +586,25 @@ func testLetStatement(t *testing.T, s ast.Statement, expectedIdentifier string) 
 	return true
 }
 
+// testLiteralExpression 根据expected的类型进入不同的辅助测试函数
+func testLiteralExpression(t *testing.T, exp ast.Expression, expected interface{}) bool {
+	// 类型断言
+	// 测试辅助函数的基本流程就是，先进行类型断言，然后根据节点结构体的字段判断是否是expected
+	switch v := expected.(type) {
+	case int:
+		return testIntegerLiteral(t, exp, int64(v))
+	case int64:
+		return testIntegerLiteral(t, exp, v)
+	case string:
+		return testIdentifier(t, exp, v)
+	case bool:
+		return testBooleanLiteral(t, exp, v)
+	}
+	t.Errorf("type of exp not handled. got=%T", exp)
+	return false
+}
+
+// testIntegerLiteral 测试输入的ast.Expression是否是ast.IntegerLiteral
 func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
 	// 不需要经过ExpressionStatement的类型断言，因为输入的时候已经是Expression
 	// 所以直接类型断言为ast.IntegerLiteral即可
@@ -596,6 +626,7 @@ func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
 	return true
 }
 
+// testIdentifier
 func testIdentifier(t *testing.T, exp ast.Expression, value string) bool {
 	ident, ok := exp.(*ast.Identifier)
 	if !ok {
@@ -613,21 +644,6 @@ func testIdentifier(t *testing.T, exp ast.Expression, value string) bool {
 		return false
 	}
 	return true
-}
-
-func testLiteralExpression(t *testing.T, exp ast.Expression, expected interface{}) bool {
-	switch v := expected.(type) {
-	case int:
-		return testIntegerLiteral(t, exp, int64(v))
-	case int64:
-		return testIntegerLiteral(t, exp, v)
-	case string:
-		return testIdentifier(t, exp, v)
-	case bool:
-		return testBooleanLiteral(t, exp, v)
-	}
-	t.Errorf("type of exp not handled. got=%T", exp)
-	return false
 }
 
 func testInfixExpression(t *testing.T, exp ast.Expression, left interface{}, operator string, right interface{}) bool {

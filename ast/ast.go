@@ -182,7 +182,6 @@ func (ie *InfixExpression) String() string {
 }
 
 // Boolean --------------------------------------
-// Boolean 是 Expression 接口的实现，是AST中的一个节点
 type Boolean struct {
 	Token token.Token
 	Value bool
@@ -195,7 +194,6 @@ func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
 func (b *Boolean) String() string { return b.Token.Literal }
 
 // IfExpression --------------------------------------
-// IfExpression 是 Expression 接口的实现，是AST中的一个节点
 type IfExpression struct {
 	Token       token.Token
 	Condition   Expression
@@ -220,12 +218,13 @@ func (ie *IfExpression) String() string {
 	return out.String()
 }
 
+// BlockStatement --------------------------------------
 type BlockStatement struct {
 	Token      token.Token
 	Statements []Statement
 }
 
-func (bs *BlockStatement) expressionNode() {}
+func (bs *BlockStatement) statementNode() {}
 
 func (bs *BlockStatement) TokenLiteral() string { return bs.Token.Literal }
 
@@ -237,10 +236,12 @@ func (bs *BlockStatement) String() string {
 	return out.String()
 }
 
+// FunctionLiteral --------------------------------------
+// 定义函数， 函数可以作为
 type FunctionLiteral struct {
-	Token      token.Token
-	Parameters []*Identifier
-	Body       *BlockStatement
+	Token      token.Token     // Token.TokenType = FUNCTION, Token.Literal = 函数名
+	Parameters []*Identifier   // 参数列表，是标识符
+	Body       *BlockStatement // 块语句
 }
 
 func (fl *FunctionLiteral) expressionNode() {}
@@ -261,10 +262,12 @@ func (fl *FunctionLiteral) String() string {
 	return out.String()
 }
 
+// CallExpression --------------------------------------
+// 调用函数
 type CallExpression struct {
-	Token     token.Token
-	Function  Expression
-	Arguments []Expression
+	Token     token.Token  // '('
+	Function  Expression   // 函数的Identifier 节点
+	Arguments []Expression // 参数列表
 }
 
 func (ce *CallExpression) expressionNode() {}
@@ -273,8 +276,9 @@ func (ce *CallExpression) TokenLiteral() string { return ce.Token.Literal }
 
 func (ce *CallExpression) String() string {
 	var out bytes.Buffer
-
-	args := []string{}
+	//args := []string{}
+	// string is the set of all strings of 8-bit bytes, conventionally but not necessarily representing UTF-8-encoded text. A string may be empty, but not nil. Values of string type are immutable.
+	var args []string
 	for _, arg := range ce.Arguments {
 		args = append(args, arg.String())
 	}
@@ -285,6 +289,7 @@ func (ce *CallExpression) String() string {
 	return out.String()
 }
 
+// StringLiteral --------------------------------------
 type StringLiteral struct {
 	Token token.Token
 	Value string

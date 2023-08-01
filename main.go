@@ -4,11 +4,11 @@ import (
 	"Monkey_1/repl"
 	"fmt"
 	"os"
-	user2 "os/user"
+	user1 "os/user"
 )
 
 func main() {
-	user, err := user2.Current()
+	user, err := user1.Current()
 	if err != nil {
 		panic(err)
 	}
