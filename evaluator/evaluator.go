@@ -15,6 +15,7 @@ var (
 
 // Eval 输入ast.Node，内部求值，返回一个值的表达 object.Object
 func Eval(node ast.Node, env *object.Environment) object.Object {
+	// 出现了Eval()的地方都需要判断是否出错
 	// node的类型断言
 	switch node := node.(type) {
 	// AST的根节点
@@ -22,6 +23,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		// evalStatements 会逐行执行代码，并没有考虑嵌套，导致嵌套遇到return时，会立即返回第一个return
 		//return evalStatements(node.Statements)
 		return evalProgram(node, env)
+
 	case *ast.ExpressionStatement:
 		return Eval(node.Expression, env)
 
@@ -46,10 +48,10 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 
 	case *ast.InfixExpression:
 		left := Eval(node.Left, env)
-		right := Eval(node.Right, env)
 		if isError(left) {
 			return left // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
+		right := Eval(node.Right, env)
 		if isError(right) {
 			return right // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
@@ -68,6 +70,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return val // 阻断返回值，否则返回的是，返回值为错误的obj
 		}
 		return &object.ReturnValue{Value: val} // return 终止了Eval的执行
+
 	case *ast.LetStatement:
 		val := Eval(node.Value, env)
 		if isError(val) {
@@ -79,6 +82,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalIdentifier(node, env)
 
 	case *ast.FunctionLiteral:
+		// 简单地将参数列表和函数体赋值
 		params := node.Parameters
 		body := node.Body
 		return &object.Function{Parameters: params, Env: env, Body: body}
@@ -90,11 +94,10 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		}
 		args := evalExpressions(node.Arguments, env)
 		if len(args) == 1 && isError(args[0]) {
+			// 只有一个参数 且 该参数是error
 			return args[0]
 		}
-
 		return applyFunction(function, args)
-
 	case *ast.StringLiteral:
 		return &object.String{Value: node.Value}
 	}
@@ -193,6 +196,7 @@ func evalInfixExpression(operator string, left, right object.Object) object.Obje
 
 }
 
+// evalIntegerInfixExpression int的中缀表达式求值，由 evalInfixExpression 调用
 func evalIntegerInfixExpression(operator string, left, right object.Object) object.Object {
 	leftValue := left.(*object.Integer).Value
 	rightValue := right.(*object.Integer).Value
@@ -228,21 +232,22 @@ func evalStringInfixExpression(operator string, left, right object.Object) objec
 	return &object.String{Value: leftValue + rightValue}
 }
 
-/* 在evalInfixExpression 已经实现了
-func evalBooleanInfixExpression(operator string, left, right object.Object) object.Object {
-	leftValue := left.(*object.Boolean).Value
-	rightValue := right.(*object.Boolean).Value
-	switch operator {
-	case "==":
-		return &object.Boolean{Value: leftValue == rightValue}
-	case "!=":
-		return &object.Boolean{Value: leftValue != rightValue}
-	default:
-		return NULL
-	}
-}
-*/
+/*
+在evalInfixExpression 已经实现了
 
+	func evalBooleanInfixExpression(operator string, left, right object.Object) object.Object {
+		leftValue := left.(*object.Boolean).Value
+		rightValue := right.(*object.Boolean).Value
+		switch operator {
+		case "==":
+			return &object.Boolean{Value: leftValue == rightValue}
+		case "!=":
+			return &object.Boolean{Value: leftValue != rightValue}
+		default:
+			return NULL
+		}
+	}
+*/
 func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Object {
 	condition := Eval(ie.Condition, env)
 	if isError(condition) {
@@ -254,20 +259,6 @@ func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Obje
 		return Eval(ie.Alternative, env)
 	} else {
 		return NULL
-	}
-}
-
-func isTrue(condition object.Object) bool {
-	// Monkey中，真值为既不是空 又不是false的值，即不一定是true
-	switch condition {
-	case NULL:
-		return false
-	case FALSE:
-		return false
-	//case TRUE:
-	//	return true
-	default:
-		return true
 	}
 }
 
@@ -306,6 +297,7 @@ func evalBlockStatement(bs *ast.BlockStatement, env *object.Environment) object.
 }
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
+	// 通过env查找标识符对应值
 	if val, ok := env.Get(node.Value); ok {
 		return val
 	}
@@ -315,12 +307,13 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	return newError("identifier not found: " + node.Value)
 }
 
+// evalExpressions 对多个表达式求值，返回object列表，用于对函数调用的参数列表求值
 func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Object {
 	var result []object.Object
 	for _, e := range exps {
 		evaluated := Eval(e, env)
 		if isError(evaluated) {
-			return result
+			return []object.Object{evaluated}
 		}
 		result = append(result, evaluated)
 	}
@@ -328,11 +321,13 @@ func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Ob
 	return result
 }
 
+// applyFunction 根据参数列表args，对函数fn调用求值
 func applyFunction(fn object.Object, args []object.Object) object.Object {
 	switch fn := fn.(type) {
 	case *object.Function:
+		// 新建环境，即作用域
 		extendedEnv := extendFunctionEnv(fn, args)
-		evaluated := Eval(fn.Body, extendedEnv)
+		evaluated := Eval(fn.Body, extendedEnv) // 为什么扩展的是定义函数时的环境，⽽不是当前环境？闭包
 		return unwrapReturnValue(evaluated)
 	case *object.Builtin:
 		return fn.Fn(args...)
@@ -342,6 +337,7 @@ func applyFunction(fn object.Object, args []object.Object) object.Object {
 
 }
 
+// extendFunctionEnv 新建环境，将参数列表args存入
 func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Environment {
 	env := object.NewEnclosedEnvironment(fn.Env)
 	for paramIdx, param := range fn.Parameters {
@@ -351,7 +347,7 @@ func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Enviro
 }
 
 func unwrapReturnValue(obj object.Object) object.Object {
-	// 如果是return节点，则不返回return节点本身，外层调用的函数收到return节点会return
+	// 如果obj是ReturnValue，则不返回obj，因为外层调用的函数收到ReturnValue会直接返回
 	if returnValue, ok := obj.(*object.ReturnValue); ok {
 		return returnValue.Value
 	}
@@ -359,7 +355,7 @@ func unwrapReturnValue(obj object.Object) object.Object {
 }
 
 func newError(format string, a ...interface{}) *object.Error {
-	return &object.Error{Message: fmt.Sprintf(format, a...)}
+	return &object.Error{Message: fmt.Sprintf(format, a...)} // a...
 }
 
 func isError(obj object.Object) bool {
@@ -374,4 +370,18 @@ func nativeBoolToBooleanObject(b bool) object.Object {
 		return TRUE
 	}
 	return FALSE
+}
+
+func isTrue(condition object.Object) bool {
+	// Monkey中，真值为既不是空 又不是false的值，即不一定是true
+	switch condition {
+	case NULL:
+		return false
+	case FALSE:
+		return false
+	//case TRUE:
+	//	return true
+	default:
+		return true
+	}
 }

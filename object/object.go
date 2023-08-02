@@ -20,36 +20,10 @@ const (
 	BUILTIN_OBJ      = "BUILTIN"
 )
 
-// 每个值有不同表现形式，因此使用接口会比使用多个字段的结构体简洁
+// 每个值有不同表现形式，因此使用 Object 接口会比使用多个字段的结构体简洁
 type Object interface {
 	Type() ObjectType
 	Inspect() string
-}
-
-// Environment ##############################################
-type Environment struct {
-	store map[string]Object
-	outer *Environment
-}
-
-// 为什么不直接使⽤map，⽽是使⽤封装
-
-func NewEnvironment() *Environment {
-	s := make(map[string]Object)
-	return &Environment{store: s, outer: nil}
-}
-
-func (e *Environment) Get(name string) (Object, bool) {
-	obj, ok := e.store[name]
-	if !ok && e.outer != nil {
-		obj, ok = e.outer.Get(name)
-	}
-	return obj, ok
-}
-
-func (e *Environment) Set(name string, obj Object) Object {
-	e.store[name] = obj
-	return obj
 }
 
 // Integer ##############################################
@@ -103,6 +77,7 @@ type Function struct {
 }
 
 func (f *Function) Inspect() string {
+	// 返回函数的字面值
 	var out bytes.Buffer
 	params := []string{}
 	for _, p := range f.Parameters {
@@ -118,12 +93,6 @@ func (f *Function) Inspect() string {
 }
 
 func (f *Function) Type() ObjectType { return FUNCTION_OBJ }
-
-func NewEnclosedEnvironment(outer *Environment) *Environment {
-	env := NewEnvironment()
-	env.outer = outer
-	return env
-}
 
 // String #################################################
 type String struct {
