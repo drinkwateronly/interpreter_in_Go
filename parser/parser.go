@@ -18,6 +18,7 @@ const (
 	PRODUCT            // *
 	PREFIX             // -X or !X
 	CALL               // myFunction(X)
+	INDEX
 )
 
 // token与优先级映射
@@ -31,6 +32,7 @@ var precedences = map[token.TokenType]int{
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
 	token.LPAREN:   CALL,
+	token.LBRACKET: INDEX,
 }
 
 type (
@@ -82,6 +84,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.FALSE, p.parseBoolean)
 	// 分组表达式 - 带括号的表达式分组
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
+	p.registerPrefix(token.LBRACKET, p.parseArrayExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	// 解析函数字面值
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
@@ -96,6 +99,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
+	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
+
 	// 解析调用表达式，属于中缀表达式解析函数
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 	return p
@@ -414,6 +419,40 @@ func (p *Parser) parseCallArguments() []ast.Expression {
 		return nil
 	}
 	return args
+}
+
+// parseArrayExpression 和 原作者类似，目前不清楚它为何分出一个函数解析array.Elements
+func (p *Parser) parseArrayExpression() ast.Expression {
+	array := &ast.ArrayLiteral{Token: p.curToken}
+	var elements []ast.Expression
+	if p.peekTokenIs(token.RBRACKET) {
+		p.nextToken()
+		return array
+	}
+	p.nextToken()
+	elements = append(elements, p.parseExpression(LOWEST))
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		elements = append(elements, p.parseExpression(LOWEST))
+	}
+
+	array.Elements = elements
+
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+	return array
+}
+
+func (p *Parser) parseIndexExpression(ArrayIdentifier ast.Expression) ast.Expression {
+	indexArray := &ast.IndexExpression{Token: p.curToken, ArrayIdentifier: ArrayIdentifier}
+	p.nextToken()
+	indexArray.Index = p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+	return indexArray
 }
 
 // ----------------------------- tools -----------------------------

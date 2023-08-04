@@ -35,6 +35,8 @@ const (
 	RPAREN    = ")"
 	LBRACE    = "{"
 	RBRACE    = "}"
+	LBRACKET  = "["
+	RBRACKET  = "]"
 
 	// 关键词 keywords
 	FUNCTION = "FUNCTION"

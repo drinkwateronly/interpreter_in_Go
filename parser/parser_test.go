@@ -99,7 +99,7 @@ func TestReturnStatements(t *testing.T) {
 	input := `
 return 5;
 return 10;
-return 993 322;
+return 993322;
 `
 	l := lexer.New(input)
 	p := New(l)
@@ -357,6 +357,14 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"add(a + b + c * d / f + g)",
 			"add((((a+b)+((c*d)/f))+g))",
 		},
+		{
+			"a * [1, 2, 3, 4][b * c] * d",
+			"((a*([1,2,3,4][(b*c)]))*d)",
+		},
+		{
+			"add(a * b[2], b[1], 2 * [1, 2][1])",
+			"add((a*(b[2])), (b[1]), (2*([1,2][1])))",
+		},
 	}
 
 	for _, tt := range tests {
@@ -555,6 +563,51 @@ func TestStringLiteralParsing(t *testing.T) {
 		t.Fatalf("exp.Token.Literal not %q. got=%q", "hello world!", exp.Token.Literal)
 	}
 
+}
+
+func TestArrayLiteralParsing(t *testing.T) {
+	input := "[100, 1*4, 3+3]"
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("stmt is not ast.ExpressionStatement. got=%T", program.Statements[0])
+	}
+	exp, ok := stmt.Expression.(*ast.ArrayLiteral)
+	if !ok {
+		t.Fatalf("exp is not *ast.ArrayLiteral, got=%T", stmt.Expression)
+	}
+	if len(exp.Elements) != 3 {
+		t.Fatalf("len(array.Elements) not 3. got=%d", len(exp.Elements))
+	}
+	testIntegerLiteral(t, exp.Elements[0], 100)
+	testInfixExpression(t, exp.Elements[1], 1, "*", 4)
+	testInfixExpression(t, exp.Elements[2], 3, "+", 3)
+
+}
+
+func TestParsingIndexExpressions(t *testing.T) {
+	input := "myArray[3+3]"
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("stmt is not ast.ExpressionStatement. got=%T", program.Statements[0])
+	}
+	exp, ok := stmt.Expression.(*ast.IndexExpression)
+	if !ok {
+		t.Fatalf("exp is not *ast.IndexExpression, got=%T", stmt.Expression)
+	}
+	if !testIdentifier(t, exp.ArrayIdentifier, "myArray") {
+		return
+	}
+	if !testInfixExpression(t, exp.Index, 3, "+", 3) {
+		return
+	}
 }
 
 // 辅助测试函数

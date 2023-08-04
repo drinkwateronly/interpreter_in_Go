@@ -18,6 +18,7 @@ const (
 	ERROR_OBJ        = "ERROR"
 	FUNCTION_OBJ     = "FUNCTION"
 	BUILTIN_OBJ      = "BUILTIN"
+	ARRAY_OBJ        = "ARRAY"
 )
 
 // 每个值有不同表现形式，因此使用 Object 接口会比使用多个字段的结构体简洁
@@ -104,7 +105,6 @@ func (s *String) Inspect() string { return s.Value }
 func (s *String) Type() ObjectType { return STRING_OBJ }
 
 // ------
-
 type BuiltinFunction func(args ...Object) Object
 
 type Builtin struct {
@@ -114,3 +114,22 @@ type Builtin struct {
 func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
 
 func (b *Builtin) Inspect() string { return "builtin function" }
+
+// ArrayLiteral
+type Array struct {
+	Elements []Object
+}
+
+func (a *Array) Type() ObjectType { return ARRAY_OBJ }
+
+func (a *Array) Inspect() string {
+	var out bytes.Buffer
+	var elements []string
+	for _, e := range a.Elements {
+		elements = append(elements, e.Inspect())
+	}
+	out.WriteString("[")
+	out.WriteString(strings.Join(elements, ","))
+	out.WriteString("]")
+	return out.String()
+}
