@@ -4,6 +4,7 @@ import (
 	"Monkey_1/ast"
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ const (
 	FUNCTION_OBJ     = "FUNCTION"
 	BUILTIN_OBJ      = "BUILTIN"
 	ARRAY_OBJ        = "ARRAY"
+	HASH_OBJ         = "HASH"
 )
 
 // 每个值有不同表现形式，因此使用 Object 接口会比使用多个字段的结构体简洁
@@ -132,4 +134,59 @@ func (a *Array) Inspect() string {
 	out.WriteString(strings.Join(elements, ","))
 	out.WriteString("]")
 	return out.String()
+}
+
+type HashKey struct {
+	//Pairs map[Object]Object
+	Type  ObjectType
+	Value uint64
+}
+
+func (b *Boolean) HashKey() HashKey {
+	var value uint64
+	if b.Value {
+		value = 1
+	} else {
+		value = 0
+	}
+	return HashKey{Type: b.Type(), Value: value}
+}
+
+func (i *Integer) HashKey() HashKey {
+	return HashKey{Type: i.Type(), Value: uint64(i.Value)}
+}
+
+// todo: 通过缓存HashKey()⽅法的返回值来优化其性能
+func (s *String) HashKey() HashKey {
+	h := fnv.New64a() // 可能出现哈希碰撞，todo: 单链法和开放式寻址法
+	h.Write([]byte(s.Value))
+	return HashKey{Type: s.Type(), Value: h.Sum64()}
+}
+
+type HashPair struct {
+	Key   Object
+	Value Object
+}
+
+type Hash struct {
+	Pairs map[HashKey]HashPair
+}
+
+func (h *Hash) Type() ObjectType { return HASH_OBJ }
+
+func (h *Hash) Inspect() string {
+	var out bytes.Buffer
+	var pairs []string
+	for _, pair := range h.Pairs {
+		pairs = append(pairs, fmt.Sprintf("%s: %s",
+			pair.Key.Inspect(), pair.Value.Inspect()))
+	}
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ", "))
+	out.WriteString("}")
+	return out.String()
+}
+
+type Hashable interface {
+	HashKey() HashKey
 }

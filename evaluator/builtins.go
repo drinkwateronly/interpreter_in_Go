@@ -1,6 +1,9 @@
 package evaluator
 
-import "Monkey_1/object"
+import (
+	"Monkey_1/object"
+	"fmt"
+)
 
 var builtins = map[string]*object.Builtin{
 	"len": &object.Builtin{
@@ -96,6 +99,14 @@ var builtins = map[string]*object.Builtin{
 				return newError("argument to `first` must be array, got %s",
 					args[0].Type())
 			}
+		},
+	},
+	"puts": &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			for _, arg := range args {
+				fmt.Println(arg.Inspect())
+			}
+			return NULL
 		},
 	},
 }

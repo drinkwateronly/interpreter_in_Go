@@ -85,6 +85,8 @@ func New(l *lexer.Lexer) *Parser {
 	// 分组表达式 - 带括号的表达式分组
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(token.LBRACKET, p.parseArrayExpression)
+	p.registerPrefix(token.LBRACE, p.parseHashLiteral)
+
 	p.registerPrefix(token.IF, p.parseIfExpression)
 	// 解析函数字面值
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
@@ -453,6 +455,29 @@ func (p *Parser) parseIndexExpression(ArrayIdentifier ast.Expression) ast.Expres
 		return nil
 	}
 	return indexArray
+}
+
+func (p *Parser) parseHashLiteral() ast.Expression {
+	hashLiteral := &ast.HashLiteral{Token: p.curToken}
+	hashLiteral.Pairs = make(map[ast.Expression]ast.Expression)
+	for !p.peekTokenIs(token.RBRACE) {
+		p.nextToken()
+		key := p.parseExpression(LOWEST)
+		if !p.expectPeek(token.COLON) {
+			return nil
+		}
+		p.nextToken()
+		value := p.parseExpression(LOWEST)
+		hashLiteral.Pairs[key] = value
+
+		if !p.peekTokenIs(token.RBRACE) && !p.expectPeek(token.COMMA) {
+			return nil
+		}
+	}
+	if !p.expectPeek(token.RBRACE) {
+		return nil
+	}
+	return hashLiteral
 }
 
 // ----------------------------- tools -----------------------------

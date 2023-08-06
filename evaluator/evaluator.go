@@ -106,6 +106,10 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return elements[0]
 		}
 		return &object.Array{Elements: elements}
+
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
+
 	case *ast.IndexExpression:
 		arrayIdentifier := Eval(node.ArrayIdentifier, env)
 		if isError(arrayIdentifier) {
@@ -337,12 +341,14 @@ func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Ob
 	return result
 }
 
-func evalIndexExpression(arrayIdentifier object.Object, index object.Object) object.Object {
+func evalIndexExpression(identifier object.Object, index object.Object) object.Object {
 	switch {
-	case arrayIdentifier.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
-		return evalArrayIndexExpression(arrayIdentifier, index)
+	case identifier.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
+		return evalArrayIndexExpression(identifier, index)
+	case identifier.Type() == object.HASH_OBJ:
+		return evalHashIndexExpression(identifier, index)
 	default:
-		return newError("index operator not supported: %s", arrayIdentifier.Type())
+		return newError("index operator not supported: %s", identifier.Type())
 	}
 }
 
@@ -354,6 +360,41 @@ func evalArrayIndexExpression(array, index object.Object) object.Object {
 		return NULL
 	}
 	return arrayObj.Elements[idx]
+}
+
+func evalHashIndexExpression(hash, index object.Object) object.Object {
+	hashObject := hash.(*object.Hash)
+	key, ok := index.(object.Hashable)
+	if !ok {
+		return newError("unusable as hash key: %s", index.Type())
+	}
+	pair, ok := hashObject.Pairs[key.HashKey()]
+	if !ok {
+		return NULL
+	}
+	return pair.Value
+}
+
+func evalHashLiteral(node *ast.HashLiteral, env *object.Environment) object.Object {
+	pairs := make(map[object.HashKey]object.HashPair)
+	for keyNode, valueNode := range node.Pairs {
+		key := Eval(keyNode, env)
+		if isError(key) {
+			return key
+		}
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return newError("unusable as hash key: %s", key.Type())
+		}
+		value := Eval(valueNode, env)
+		if isError(value) {
+			return value
+		}
+		hashed := hashKey.HashKey()
+		pairs[hashed] = object.HashPair{Key: key, Value: value}
+	}
+
+	return &object.Hash{Pairs: pairs}
 }
 
 // applyFunction 根据参数列表args，对函数fn调用求值
